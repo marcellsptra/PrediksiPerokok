@@ -20,7 +20,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, ConfusionMatrixDisplay
 
-data = pd.read_csv('/content/sample_data/smoking.csv', delimiter=';')
+data = pd.read_csv('/sample_data/smoking.csv', delimiter=';')
 
 """#PRE-PROCESSING DATA
 
