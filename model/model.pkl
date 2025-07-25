@@ -1,0 +1,103 @@
+import os
+import pandas as pd
+import numpy as np  # <-- Perbaikan: Menambahkan import numpy
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import joblib
+import shutil
+
+# --- Konfigurasi Path ---
+MODEL_DIR = 'model'
+INITIAL_DATA_PATH = 'smoking.csv'
+FINAL_DATA_PATH = os.path.join(MODEL_DIR, 'dataset.csv')
+MODEL_PATH = os.path.join(MODEL_DIR, 'model.pkl')
+
+# --- Menyiapkan Direktori dan Data ---
+if not os.path.exists(MODEL_DIR):
+    os.makedirs(MODEL_DIR)
+
+if os.path.exists(INITIAL_DATA_PATH):
+    shutil.move(INITIAL_DATA_PATH, FINAL_DATA_PATH)
+    print(f"File '{INITIAL_DATA_PATH}' telah dipindahkan dan diubah namanya menjadi '{FINAL_DATA_PATH}'.")
+
+# --- Fungsi Training dengan Pembersihan Data ---
+def clean_train_and_save_model():
+    """
+    Memuat data, membersihkan nilai yang tidak valid, melatih model,
+    dan menyimpannya sebagai model/model.pkl.
+    """
+    print(f"Memuat data dari `{FINAL_DATA_PATH}`...")
+    try:
+        df = pd.read_csv(FINAL_DATA_PATH, sep=';')
+    except FileNotFoundError:
+        print(f"ERROR: File `{FINAL_DATA_PATH}` tidak ditemukan.")
+        return
+
+    # --- Langkah 1: Pembersihan Data (Data Cleaning) ---
+    print("Memulai pembersihan data...")
+    # Standarisasi nama kolom
+    df.columns = [col.replace(' ', '_').lower() for col in df.columns]
+    if 'id' in df.columns:
+        df.drop("id", axis=1, inplace=True)
+
+    # Konversi kolom 'gender'
+    if 'gender' in df.columns:
+        df['gender'] = df['gender'].apply(lambda x: 1 if x == 'Male' else 0)
+
+    # Mengidentifikasi kolom yang seharusnya numerik
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+
+    # Loop melalui semua kolom untuk membersihkan nilai non-numerik
+    for col in df.columns:
+        if col not in numeric_cols: # Hanya proses kolom non-numerik (tipe 'object')
+            # Ubah paksa ke numerik, error akan menjadi NaN (Not a Number)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Cek nilai kosong (NaN) yang muncul setelah konversi paksa
+    print("\nJumlah nilai kosong (NaN) per kolom SETELAH konversi paksa:")
+    print(df.isnull().sum())
+
+    # Isi nilai kosong (NaN) dengan nilai median dari kolom masing-masing
+    for col in df.columns:
+        if df[col].isnull().any():
+            median_val = df[col].median()
+            df[col].fillna(median_val, inplace=True)
+            print(f"Kolom '{col}' yang kosong diisi dengan median: {median_val}")
+
+    print("\nPembersihan data selesai. Semua nilai sudah valid.")
+
+    # --- Langkah 2: Proses Training ---
+    X = df.drop('smoking', axis=1)
+    y = df['smoking']
+    expected_columns = X.columns.tolist()
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    print("\nData dibagi menjadi data latih (80%) dan data uji (20%).")
+
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    print("Scaler (StandardScaler) berhasil dilatih.")
+
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+    rf_model.fit(X_train_scaled, y_train)
+    print("Model (RandomForestClassifier) berhasil dilatih.")
+
+    y_pred = rf_model.predict(X_test_scaled)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Akurasi Model pada Data Uji: {accuracy:.2%}")
+
+    # --- Langkah 3: Menyimpan Model ---
+    model_artifacts = {
+        'model': rf_model,
+        'scaler': scaler,
+        'columns': expected_columns
+    }
+    joblib.dump(model_artifacts, MODEL_PATH)
+
+    print(f"\n🎉 Model berhasil dibuat dan disimpan di `{MODEL_PATH}`!")
+
+# --- Menjalankan Seluruh Proses ---
+clean_train_and_save_model()
